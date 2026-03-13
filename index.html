@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Budget Tracker</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<style>
+body { font-family: Arial; margin:40px; background:#f5f5f5; display:flex; justify-content:center; }
+.container { background:white; padding:20px; border-radius:10px; width:400px; }
+h2 { margin:0 0 10px 0; color:#666; font-size:14px; text-transform:uppercase; }
+.total-box { font-size:2rem; font-weight:700; margin-bottom:20px; }
+input { width:100%; padding:10px; margin:5px 0; border-radius:6px; border:1px solid #ccc; }
+.button-row { display:flex; gap:10px; margin-bottom:20px; }
+button { flex:1; padding:10px; border:none; border-radius:6px; cursor:pointer; font-weight:700; }
+.btn-add { background:#888; color:white; }
+.btn-clear { background:#d6d6d6; color:#333; }
+ul { list-style:none; padding:0; margin:0; }
+li { padding:10px 5px; display:flex; justify-content:space-between; border-bottom:1px solid #eee; }
+.delete-btn { color:#999; cursor:pointer; }
+.delete-btn:hover { color:#c0392b; }
+#resultBox { margin-top:15px; font-size:14px; color:#444; }
+</style>
+</head>
+
+<body>
+<div class="container">
+  <h2>Total Cost</h2>
+  <div class="total-box">P<span id="t">0.00</span></div>
+
+  <input type="text" id="k" placeholder="Item Name">
+  <input type="number" id="v" placeholder="Amount">
+  <input type="number" id="wallet" placeholder="E-Wallet Balance">
+
+  <div class="button-row">
+    <button class="btn-add" onclick="addItem()">ADD ITEM</button>
+    <button class="btn-clear" onclick="resetAll()">RESET</button>
+    <button class="btn-clear" onclick="predictBudget()">PREDICT</button>
+  </div>
+
+  <ul id="l"></ul>
+  <div id="resultBox"></div>
+</div>
+
+<script>
+const SB_URL="https://tsrqbjqtmvfwmlkcbmnv.supabase.co";
+const SB_KEY="sb_publishable_K1_ccu4JHHehoO18J5vxOg_9JnHbhW3";
+const sb = supabase.createClient(SB_URL, SB_KEY);
+
+const totalEl = document.getElementById('t');
+const listEl = document.getElementById('l');
+const nameInp = document.getElementById('k');
+const amtInp = document.getElementById('v');
+
+async function showData() {
+  const { data, error } = await sb.from('budgetDB').select('*').order('id');
+  if(error) return console.error(error);
+
+  listEl.innerHTML = "";
+  let total = 0;
+  data.forEach(item => {
+    total += parseFloat(item.amount);
+    const li = document.createElement('li');
+    li.innerHTML = `<span>${item.item}</span>
+      <span>P${parseFloat(item.amount).toFixed(2)}
+      <i class="fas fa-times delete-btn" onclick="deleteItem(${item.id})"></i></span>`;
+    listEl.appendChild(li);
+  });
+  totalEl.innerText = total.toFixed(2);
+}
+
+async function addItem() {
+  const name = nameInp.value;
+  const amount = parseFloat(amtInp.value);
+  if(!name || amount <= 0) return;
+
+  await sb.from('budgetDB').insert([{ item:name, amount:amount }]);
+  nameInp.value = "";
+  amtInp.value = "";
+  showData();
+}
+
+async function deleteItem(id) {
+  await sb.from('budgetDB').delete().eq('id', id);
+  showData();
+}
+
+async function resetAll() {
+  if(confirm("Delete all history?")) {
+    await sb.from('budgetDB').delete().neq('id', 0);
+    showData();
+  }
+}
+
+async function predictBudget() {
+  const wallet = parseFloat(document.getElementById('wallet').value || 0);
+  const { data } = await sb.from('budgetDB').select('*');
+  let totalExpenses = 0;
+  data.forEach(i => totalExpenses += parseFloat(i.amount));
+
+  const remaining = wallet - totalExpenses;
+  const status = remaining < 0 ? "⚠️ Budget Deficit" : "✅ Budget Safe";
+
+  document.getElementById('resultBox').innerHTML = `
+    <b>Budget Prediction</b><br>
+    Wallet: P${wallet.toFixed(2)}<br>
+    Expenses: P${totalExpenses.toFixed(2)}<br>
+    Remaining: P${remaining.toFixed(2)}<br>
+    ${status}
+  `;
+}
+
+// Load initial data
+window.onload = showData;
+
+</script>
+</body>
+</html>
